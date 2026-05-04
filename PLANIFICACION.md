@@ -35,7 +35,7 @@ El comerciante no necesita saber de tecnología. Carga su catálogo, conecta su 
 - [x] **Un número de WhatsApp por comerciante** (no número compartido)
 - [x] Messenger como canal secundario
 - [x] IA con acceso a stock en tiempo real
-- [x] Panel admin para el comerciante
+- [x] Panel admin PWA (no app nativa — webapp responsiva instalable desde el navegador)
 - [x] Pagos QR (el método dominante en Bolivia)
 - [x] Mercado inicial: Bolivia
 
@@ -54,27 +54,26 @@ El comerciante no necesita saber de tecnología. Carga su catálogo, conecta su 
 │         Meta Cloud API (WhatsApp Business Platform)     │
 │               Meta Webhooks (Messenger)                 │
 └──────────────────────────────┬──────────────────────────┘
-                               │
+                               │ webhook POST
 ┌──────────────────────────────▼──────────────────────────┐
-│                   BACKEND PRINCIPAL                     │
-│                  Python + FastAPI                       │
-│                                                         │
-│  ┌─────────────┐  ┌─────────────┐  ┌────────────────┐  │
-│  │ Bot Engine  │  │  Stock API  │  │  Payment API   │  │
-│  │ (IA + flow) │  │  (consulta) │  │  (QR Bolivia)  │  │
-│  └─────────────┘  └─────────────┘  └────────────────┘  │
+│              FastAPI — responde 200 en <100ms           │
+│                     encola en Redis                     │
 └──────────────────────────────┬──────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────┐
-│                   BASE DE DATOS                         │
-│    PostgreSQL (stock, pedidos, clientes, config)        │
-│    Redis (contexto de conversaciones activas)           │
-└─────────────────────────────────────────────────────────┘
+│                   CELERY WORKER                         │
+│   Claude API (tool use) → Stock / Pedidos / QR         │
+└──────────────────────────────┬──────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────┐
-│                   PANEL ADMIN                           │
-│              Next.js + shadcn/ui                       │
-│    (cargar catálogo, ver conversaciones, pedidos)       │
+│  PostgreSQL (Supabase) — RLS por merchant_id            │
+│  Redis — cola Celery + contexto de conversaciones 24h   │
+│  Supabase Storage — imágenes de catálogo                │
+└──────────────────────────────┬──────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────┐
+│  Next.js 14 PWA (Vercel) + shadcn/ui + Tailwind         │
+│  Panel admin — mobile-first, instalable sin App Store   │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -84,34 +83,80 @@ El comerciante no necesita saber de tecnología. Carga su catálogo, conecta su 
 
 ### Backend
 - **Lenguaje**: Python 3.12+
-- **Framework**: FastAPI
-- **Base de datos**: PostgreSQL (Supabase para MVP)
-- **Caché / sesiones**: Redis
-- **IA**: Claude API (Anthropic) con function calling — el bot llama la API de stock como herramienta
+- **Framework**: FastAPI — monolito modular (no microservicios en MVP)
+- **Base de datos**: PostgreSQL (Supabase) — schema compartido + `merchant_id` en todas las tablas + RLS
+- **Caché / sesiones**: Redis — doble uso: contexto de conversaciones (TTL 24h) + cola de tareas Celery
+- **Cola de tareas**: Celery + Redis — webhooks responden 200 inmediatamente, workers procesan en async
+- **IA**: Claude API (`claude-sonnet-4-6`) con tool use nativo — sin LangChain
+- **Almacenamiento de imágenes**: Supabase Storage (MVP) → Cloudinary en Fase 2
+- **Gestor de dependencias**: `uv` + `pyproject.toml`
 
 ### Frontend (Panel Admin)
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 14 (App Router) — **PWA** (manifest + service worker en Fase 2)
 - **UI**: shadcn/ui + Tailwind CSS
 - **Auth**: Supabase Auth
+- **Instalación**: El comerciante la agrega al home de su celular desde el navegador, sin App Store
 
 ### Mensajería
 - **WhatsApp**: Meta Cloud API (WhatsApp Business Platform)
   - Cada comerciante conecta su propio número via **Embedded Signup**
   - Cada uno tiene su propia WABA (WhatsApp Business Account)
   - Evita baneos cruzados y cumple con políticas de Meta
-- **Messenger**: Meta Webhooks (directo, sin costo adicional)
+- **Messenger**: Meta Webhooks + Page Access Token por página (OAuth, sin contraseña)
 
 ### Infraestructura (MVP)
-- **Backend**: Railway o Render
+- **Backend**: Railway (soporte nativo para workers Celery)
 - **Frontend**: Vercel
 - **DB**: Supabase
 - **Costo estimado MVP**: ~$30-50 USD/mes
 
 ---
 
-## WhatsApp: Un Número por Comerciante
+## Cómo correr el proyecto localmente
 
-Esta es la decisión correcta por varias razones:
+### Requisitos previos
+- Python 3.12+ (instalar con `uv python install 3.12`)
+- Node.js 18+ y npm
+- Docker Desktop (para Redis en desarrollo)
+- `uv` instalado: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+
+### Backend
+```bash
+cd backend
+cp .env.example .env        # completar variables
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+
+# Terminal 1 — API
+uvicorn app.main:app --reload
+
+# Terminal 2 — Worker
+celery -A app.workers.celery_app worker --loglevel=info
+
+# O todo junto con Docker
+cd .. && docker compose up
+```
+
+### Frontend
+```bash
+cd frontend
+cp .env.local.example .env.local   # completar variables
+npm install
+npm run dev                         # corre en http://localhost:3000
+```
+
+### Exponer webhook para desarrollo
+```bash
+# Instalar ngrok si no lo tienes
+brew install ngrok
+ngrok http 8000
+# Copiar la URL https://xxxx.ngrok.io y configurarla en Meta Developer Console
+```
+
+---
+
+## WhatsApp: Un Número por Comerciante
 
 1. **Aislamiento de reputación**: Si un comerciante tiene problemas con Meta, no afecta a los demás
 2. **Identidad de marca**: El número pertenece al negocio, no a VentaBot
@@ -129,50 +174,88 @@ Esta es la decisión correcta por varias razones:
 
 ---
 
+## Requisitos Meta Business Platform
+
+### Lo que VentaBot necesita hacer (una sola vez como plataforma)
+
+#### Paso 1 — Verificación de negocio de Meta ⚠️ pendiente empresa
+- Crear cuenta en Meta Business Manager (business.facebook.com)
+- Documentos: registro legal de la empresa, dirección física, teléfono del negocio
+- Meta acepta empresas de Bolivia y Latam
+- **Tiempo**: 1-5 días hábiles — **bloquea el lanzamiento, iniciar en cuanto haya empresa**
+
+#### Paso 2 — Meta App de desarrollo (se puede hacer ya)
+- Crear app en developers.facebook.com → tipo "Business"
+- Agregar productos: WhatsApp + Messenger
+- Usar el número de prueba gratuito de Meta para sandbox
+- Configurar webhook con ngrok mientras se desarrolla
+
+#### Paso 3 — Permisos avanzados (requieren app verificada)
+
+| Canal | Permiso | Para qué |
+|-------|---------|---------|
+| WhatsApp | `whatsapp_business_management` | Embedded Signup de comerciantes |
+| WhatsApp | `whatsapp_business_messaging` | Enviar/recibir mensajes |
+| Messenger | `pages_messaging` | Mensajes en páginas de terceros |
+
+> Revisión de Meta: descripción del caso de uso + video demo + política de privacidad pública.
+
+### Pricing WhatsApp Cloud API
+
+| Tipo de conversación | Costo |
+|---------------------|-------|
+| Iniciada por el usuario (service) | Gratis primer mes; luego ~$0.01-0.06 |
+| Iniciada por el negocio (marketing/utility) | ~$0.05-0.08 por conversación |
+
+### Tiers de mensajes (números nuevos)
+
+| Tier | Conversaciones únicas/día |
+|------|--------------------------|
+| 1 (inicio) | 1,000 |
+| 2 | 10,000 |
+| 3 | 100,000 |
+
+---
+
 ## Pagos en Bolivia
 
-### Panorama de pagos QR en Bolivia
+### Prioridad de integración
 
-Bolivia tiene un ecosistema QR maduro e interoperable desde 2021, impulsado por el BCB.
+1. **dLocal** → MVP
+2. **Tigo Money** → negociar partnership en paralelo al desarrollo
+3. **OpenBCB / $imple** → post-MVP
 
-### Opciones de integración (en orden de recomendación)
+### Requisitos por pasarela
 
-#### 1. OpenBCB (prioritario)
-- Plataforma de pagos del Banco Central de Bolivia
-- **Gratis** para integración
-- QR interoperable con todos los bancos y billeteras del país
-- Lanzado en 2025, orientado a desarrolladores
-- Contacto: https://www.bcb.gob.bo (sección Sistema de Pagos → OPEN BCB)
+#### 1. dLocal *(MVP)*
+- Acepta empresas bolivianas y extranjeras
+- **Sandbox**: disponible desde el día 1
+- **Aprobación**: días
+- **Costo**: ~2-3% por transacción
+- **Ventaja**: cubre Latam completo para la expansión futura
 
-#### 2. $imple (ASOBAN)
-- Sistema QR de la Asociación de Bancos Privados de Bolivia
-- Interoperable entre todos los bancos privados
-- Muy adoptado en comercios físicos
+#### 2. Tigo Money *(negociar ya)*
+- Requiere empresa boliviana con NIT + contrato con Tigo Bolivia
+- Proceso comercial: semanas o meses → contactar cuanto antes
 
-#### 3. Tigo Money
-- Billetera móvil dominante en Bolivia
-- Tiene API (requiere partnership directo)
-- Librería PHP disponible en GitHub: `saulmoralespa/tigo-money-api-php`
-- Muy usado en zonas rurales y por personas sin cuenta bancaria
+#### 3. OpenBCB *(post-MVP)*
+- Requiere NIT boliviano + registro directo con el BCB
+- API no pública aún, proceso burocrático indeterminado
+- Gratis, interoperable con todos los bancos
 
-#### 4. dLocal
-- Gateway internacional que opera en Bolivia
-- Documentación: https://docs.dlocal.com/docs/bolivia
-- Soporta QR, tarjetas y pagos instantáneos
-- Buena opción si queremos expandirnos a otros países después
-
-#### 5. EBANX + Pagosnet
-- Integración con Sintesis (55% del comercio digital boliviano usa sus centros de pago)
-- Soporta QR y más de 1,600 puntos de pago en efectivo
+#### 4. $imple / ASOBAN *(post-MVP)*
+- Acceso a través de banco miembro (Unión, BCP, Bisa)
+- Sin API pública directa
 
 ### Flujo de pago QR en el bot
-
 ```
-Cliente: "Quiero comprar 2 unidades de X"
-Bot: Confirma disponibilidad en stock → genera QR de cobro → envía imagen QR por WhatsApp
-Cliente: Escanea QR con app bancaria / Tigo Money
-Sistema: Webhook de confirmación de pago → bot notifica al comerciante y al cliente
-Bot: "¡Pago confirmado! Tu pedido #123 está siendo preparado."
+Cliente confirma pedido
+→ Bot genera QR de cobro vía dLocal
+→ Envía imagen QR por WhatsApp
+→ Cliente escanea con app bancaria / Tigo Money
+→ dLocal dispara webhook de confirmación
+→ Bot notifica a comerciante y cliente
+→ Estado del pedido: pending → paid
 ```
 
 ---
@@ -186,14 +269,11 @@ Cliente inicia conversación
 Bot saluda + muestra categorías del catálogo
         │
         ▼
-Cliente hace consulta (texto libre en español)
-        │
-        ▼
-IA interpreta intención:
-  ├── Consulta de stock → llama Stock API → responde con disponibilidad y precio
-  ├── Intención de compra → inicia flujo de pedido
-  ├── Pregunta sobre horarios/ubicación → responde con datos del negocio
-  └── No entiende → ofrece hablar con humano
+Claude interpreta mensaje (tool use):
+  ├── consultar_stock     → disponibilidad y precio
+  ├── crear_pedido        → inicia flujo de compra
+  ├── obtener_info_negocio → horarios, ubicación
+  └── sin tool            → respuesta conversacional
         │
         ▼
 Flujo de pedido:
@@ -206,72 +286,86 @@ Flujo de pedido:
 
 ---
 
+## Modelos de Base de Datos
+
+| Tabla | Descripción |
+|-------|-------------|
+| `merchants` | Comerciantes — credenciales Meta, config del negocio, plan |
+| `products` | Catálogo — nombre, precio, stock, imagen |
+| `conversations` | Hilo por cliente por canal (whatsapp / messenger) |
+| `messages` | Historial de mensajes por conversación |
+| `orders` | Pedidos — estado (pending → paid → delivering) |
+| `order_items` | Ítems por pedido |
+
+Todas las tablas tienen `merchant_id` + RLS en Supabase.
+
+---
+
 ## Panel Admin (Funcionalidades)
 
 ### MVP
-- [ ] Cargar/editar catálogo de productos (nombre, precio, stock, imagen)
+- [ ] Cargar/editar catálogo (nombre, precio, stock, imagen)
 - [ ] Ver conversaciones activas
-- [ ] Ver pedidos recibidos y su estado
-- [ ] Configurar datos del negocio (nombre, horario, ubicación, mensaje de bienvenida)
+- [ ] Ver pedidos y su estado
+- [ ] Configurar datos del negocio (nombre, horario, ubicación, bienvenida)
 - [ ] Conectar número de WhatsApp (Embedded Signup)
 - [ ] Ver historial de pagos
+- [ ] Diseño responsivo mobile-first
+
+### PWA (Fase 2)
+- [ ] Web App Manifest
+- [ ] Service Worker (caché, funciona con conexión lenta)
+- [ ] Push notifications para nuevos pedidos
 
 ### v2
-- [ ] Tomar conversaciones manualmente (handoff humano)
-- [ ] Reportes básicos (ventas por día, productos más consultados)
+- [ ] Handoff humano (comerciante toma la conversación)
+- [ ] Reportes básicos de ventas
 - [ ] Importar catálogo por CSV
-- [ ] Múltiples usuarios del panel (dueño + empleados)
+- [ ] Múltiples usuarios del panel
 
 ---
 
 ## Modelo de Negocio
 
-### Precios (en BOB para Bolivia)
-
 | Plan | Precio | Conversaciones/mes | Incluye |
 |------|--------|---------------------|---------|
 | **Gratis** | Bs. 0 | 100 | Solo Messenger |
 | **Básico** | Bs. 130/mes (~$19) | 500 | WhatsApp + Messenger, catálogo hasta 50 productos |
-| **Pro** | Bs. 340/mes (~$49) | 2,000 | Todo lo anterior + handoff humano, catálogo ilimitado, reportes |
+| **Pro** | Bs. 340/mes (~$49) | 2,000 | Todo + handoff humano, catálogo ilimitado, reportes |
 
-### Principios del modelo de pago
-- Precio predecible (por mes, no por mensaje)
-- El costo de la IA y WhatsApp API está absorbido en el precio
-- Trial de 14 días sin tarjeta de crédito
-- Pago vía QR Bolivia (el cliente también puede pagar con QR)
-
-### Estimación de costos por comerciante (plan Básico, 500 conversaciones)
+### Estimación de costos (plan Básico, 500 conversaciones)
 - Claude API (~500 llamadas): ~$3-5 USD
-- WhatsApp Cloud API (conversaciones iniciadas por usuario: gratuitas en su mayoría): ~$2-4 USD
+- WhatsApp Cloud API: ~$2-4 USD
 - Infraestructura prorrateada: ~$3 USD
-- **Costo total estimado**: ~$8-12 USD → precio $19 USD → margen ~40-50%
+- **Costo total**: ~$8-12 USD → precio $19 USD → margen ~40-50%
 
 ---
 
 ## Cosas Importantes No Obvias
 
 ### Técnicas
-- **Contexto de conversación**: Cada conversación necesita memoria del historial reciente para que el bot sea coherente. Redis es ideal para esto con TTL de ~24h.
-- **Rate limits de Meta**: WhatsApp tiene límites de mensajes por tier. Los números nuevos empiezan en Tier 1 (1,000 conversaciones únicas/día) y escalan con el tiempo.
-- **Webhooks de pago**: La confirmación de pago QR es asíncrona. El sistema tiene que manejar bien los estados (pendiente → confirmado → fallido).
-- **Imágenes del catálogo**: WhatsApp soporta envío de imágenes, pero tienen límites de tamaño. Las imágenes del catálogo deben estar optimizadas.
+- **Contexto de conversación**: Redis con TTL 24h — el bot mantiene coherencia entre mensajes
+- **Webhook debe responder en <5s**: por eso Celery — FastAPI responde 200 inmediatamente
+- **Rate limits de Meta**: Tier 1 = 1,000 conversaciones únicas/día, escala automático
+- **Webhooks de pago asincrónicos**: estados `pending → paid → failed` — hay que manejarlos bien
+- **Imágenes del catálogo**: límite 5MB en WhatsApp — optimizar antes de enviar
 
 ### De negocio
-- **Onboarding guiado**: El comerciante promedio en Bolivia no es técnico. El proceso de configurar WhatsApp + cargar catálogo tiene que ser de menos de 15 minutos.
-- **Soporte en español boliviano**: Los templates de WhatsApp y los mensajes del bot deben sonar naturales para Bolivia (no genérico).
-- **Verificación de negocio de Meta**: Para usar WhatsApp Business API, Meta puede pedir verificación del negocio. Hay que guiar al comerciante en este proceso.
-- **Prueba con comerciantes reales**: Antes de lanzar, validar con 3-5 comerciantes reales (almacenes, tiendas de ropa, licorerías, etc.)
+- **Onboarding en <15 minutos**: el comerciante boliviano promedio no es técnico
+- **Español boliviano**: los mensajes del bot deben sonar naturales, no genéricos
+- **Verificación Meta**: hay que guiar al comerciante en el proceso de verificación de su negocio
+- **Pilotos reales**: validar con 3-5 comerciantes antes del lanzamiento público
 
 ---
 
 ## Lo que NO vamos a hacer (por ahora)
 
-- App móvil
-- Integración con ERPs o sistemas de facturación complejos
-- Soporte para más de 2 canales
+- App móvil nativa
+- Integración con ERPs
+- Más de 2 canales de mensajería
 - Analytics avanzado
 - Multiidioma
-- Pagos con tarjeta de crédito (el mercado es QR)
+- Pagos con tarjeta de crédito
 - Voz o notas de audio
 
 ---
@@ -279,22 +373,31 @@ Flujo de pedido:
 ## Hoja de Ruta
 
 ### Fase 1 — MVP (estimado: 10-12 semanas)
-- [ ] Backend FastAPI + PostgreSQL + Redis
-- [ ] Integración WhatsApp Cloud API (multi-tenant)
-- [ ] Bot con IA (Claude API + function calling para stock)
-- [ ] Panel admin básico (Next.js)
-- [ ] Integración pago QR (OpenBCB o dLocal)
+- [x] Planificación y decisiones de arquitectura
+- [x] Scaffold del proyecto (backend + frontend)
+- [ ] Empresa legal constituida en Bolivia
+- [ ] Meta App de desarrollo configurada + webhook funcionando
+- [ ] Esquema de BD en Supabase + migraciones Alembic
+- [ ] Bot mínimo: recibe mensaje → Claude responde → respuesta al usuario
+- [ ] Tool `consultar_stock` funcionando con BD real
+- [ ] Tool `crear_pedido` + generación de QR dLocal
+- [ ] Panel admin: catálogo, pedidos, conversaciones
+- [ ] Auth con Supabase
+- [ ] Embedded Signup de WhatsApp
 - [ ] 1-2 comerciantes piloto reales en Bolivia
 
 ### Fase 2 — Producto (estimado: +8 semanas)
-- [ ] Handoff humano (el comerciante toma la conversación)
+- [ ] Handoff humano
 - [ ] Messenger como canal adicional
 - [ ] Importación de catálogo por CSV
 - [ ] Reportes básicos de ventas
 - [ ] Sistema de suscripción y cobro automático
+- [ ] PWA: manifest + service worker + push notifications
+- [ ] Cloudinary para optimización de imágenes
 
 ### Fase 3 — Escala
 - [ ] Onboarding self-service completo
+- [ ] OpenBCB / Tigo Money integrados
 - [ ] Integración con Tienda Nube / WooCommerce
 - [ ] Expansión a otros países de Latam
 - [ ] Marketplace de plantillas de respuesta
@@ -303,10 +406,10 @@ Flujo de pedido:
 
 ## Preguntas Abiertas
 
-- [ ] ¿Qué gateway QR vamos a integrar primero? (OpenBCB requiere registro directo con el BCB)
 - [ ] ¿El comerciante usa un número que ya tiene, o VentaBot provee el número?
 - [ ] ¿Cómo manejamos el inventario cuando el stock llega a 0 mid-conversación?
 - [ ] ¿Quién maneja el soporte al comerciante cuando algo falla?
+- [ ] ¿Cuándo constituir la empresa legal? (necesaria para Meta + dLocal)
 
 ---
 
@@ -314,21 +417,43 @@ Flujo de pedido:
 
 ```
 ventasbot/
-├── backend/          # FastAPI
+├── backend/
 │   ├── app/
-│   │   ├── bot/      # Lógica del bot e IA
-│   │   ├── api/      # Endpoints REST
-│   │   ├── models/   # Modelos de BD
-│   │   └── integrations/
-│   │       ├── whatsapp/
-│   │       ├── messenger/
-│   │       └── payments/
-│   └── tests/
-├── frontend/         # Next.js (panel admin)
+│   │   ├── main.py               # FastAPI entry point
+│   │   ├── config.py             # Variables de entorno (pydantic-settings)
+│   │   ├── database.py           # SQLAlchemy async engine
+│   │   ├── api/v1/
+│   │   │   └── webhooks.py       # Endpoints WhatsApp + Messenger
+│   │   ├── bot/
+│   │   │   ├── engine.py         # Claude API + tool use
+│   │   │   └── tools.py          # Definición de tools (stock, pedido, info)
+│   │   ├── models/
+│   │   │   ├── merchant.py
+│   │   │   ├── product.py
+│   │   │   ├── conversation.py   # Conversation + Message
+│   │   │   └── order.py          # Order + OrderItem
+│   │   └── workers/
+│   │       ├── celery_app.py     # Configuración Celery
+│   │       └── tasks.py          # Tareas async
+│   ├── pyproject.toml
+│   ├── Dockerfile
+│   └── .env.example
+├── frontend/
 │   ├── app/
-│   └── components/
-├── PLANIFICACION.md  # Este documento
-└── README.md
+│   │   ├── (auth)/login/         # Login con Supabase Auth
+│   │   ├── (dashboard)/
+│   │   │   ├── dashboard/        # Resumen
+│   │   │   ├── catalogo/         # Gestión de productos
+│   │   │   ├── pedidos/          # Lista de pedidos
+│   │   │   └── conversaciones/   # Conversaciones activas
+│   │   └── layout.tsx
+│   ├── public/manifest.json      # PWA manifest
+│   ├── package.json
+│   ├── next.config.js
+│   └── .env.local.example
+├── docker-compose.yml            # Redis + backend + worker
+├── .gitignore
+└── PLANIFICACION.md
 ```
 
 ---
