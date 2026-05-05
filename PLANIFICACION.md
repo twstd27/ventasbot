@@ -112,6 +112,106 @@ El comerciante no necesita saber de tecnología. Carga su catálogo, conecta su 
 
 ---
 
+## Decisión: Proveedor de IA — Claude vs ChatGPT (OpenAI)
+
+### Comparativa de costos
+
+| Modelo | Input ($/MTok) | Output ($/MTok) | Costo est. 500 conv/mes |
+|--------|----------------|-----------------|--------------------------|
+| **GPT-4o mini** (OpenAI) | $0.15 | $0.60 | **~$0.80 USD** |
+| Claude Haiku 4.5 (Anthropic) | $0.80 | $4.00 | ~$5.00 USD |
+| GPT-4o (OpenAI) | $2.50 | $10.00 | ~$15.00 USD |
+| Claude Sonnet 4.6 (Anthropic) | $3.00 | $15.00 | ~$20.00 USD |
+
+> Estimación: 8 turnos/conversación × ~500 tokens input + ~200 tokens output por turno.
+
+### Recomendación: **GPT-4o mini para el MVP**
+
+**GPT-4o mini es ~6x más barato que Claude Haiku** para el mismo volumen. Para un bot de ventas con tool use simple (consultar stock, crear pedido, info del negocio), GPT-4o mini es completamente suficiente:
+
+- ✅ Function calling / tool use: excelente
+- ✅ Español natural: muy bueno
+- ✅ Latencia: rápida (~1–2s)
+- ✅ Contexto: 128K tokens
+- ✅ API confiable con alta disponibilidad
+
+**Impacto en el margen (plan Básico, 500 conv/mes):**
+
+| Modelo | Costo IA | Costo total est. | Precio | Margen |
+|--------|----------|-----------------|--------|--------|
+| GPT-4o mini | ~$0.80 | ~$5–7 USD | $19 USD | **~60–70%** |
+| Claude Haiku 4.5 | ~$5.00 | ~$10–12 USD | $19 USD | ~40–50% |
+
+### Cuándo subir de modelo
+
+- Alta tasa de malentendidos o respuestas incorrectas del bot en producción
+- Catálogos muy grandes (>300 productos) donde el contexto crece mucho
+- Necesidad de razonamiento complejo en pedidos con múltiples condiciones
+
+En ese caso, subir a **GPT-4o** o **Claude Sonnet 4.6** — ambos similares en calidad; elegir según precio en ese momento.
+
+### Si preferís quedarte en el ecosistema Anthropic
+
+Usar **Claude Haiku 4.5** (`claude-haiku-4-5-20251001`) — no Sonnet. La diferencia de calidad para consultas de ventas simples es mínima y es el Claude más económico. Cambiar el modelo es una línea de código, así que la decisión no es irreversible:
+
+```python
+# bot/engine.py
+AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
+# Alternativas: "claude-haiku-4-5-20251001", "gpt-4o", "claude-sonnet-4-6"
+```
+
+---
+
+## Por qué Supabase
+
+Sí, Supabase es la elección correcta para VentaBot. Aquí el razonamiento concreto.
+
+### Lo que reemplaza en un solo servicio
+
+| Necesidad | Con Supabase | Sin Supabase |
+|-----------|-------------|--------------|
+| PostgreSQL | ✅ incluido | RDS / PlanetScale → +$15–30/mes |
+| Auth (JWT, OAuth, magic link) | ✅ incluido | Auth0 / Clerk → +$25/mes |
+| Storage de imágenes (catálogo) | ✅ incluido | S3 → costos variables |
+| RLS multi-tenant | ✅ nativo en Postgres | Filtrar manualmente en cada query del backend |
+| Realtime (updates en panel admin) | ✅ incluido | Socket.io / Pusher → +$25/mes |
+
+**El free tier cubre todo el desarrollo y los primeros comerciantes piloto sin costo.**
+
+### El killer feature: RLS por merchant_id
+
+VentaBot es multi-tenant — todos los comerciantes comparten la misma base de datos pero cada uno solo puede ver sus propios datos. Con RLS de Supabase, esto se implementa **una sola vez** a nivel de base de datos:
+
+```sql
+-- Una política protege todos los datos de un comerciante automáticamente
+CREATE POLICY "aislamiento_por_comerciante" ON products
+  FOR ALL USING (merchant_id = (auth.jwt() ->> 'merchant_id')::uuid);
+```
+
+Sin RLS, hay que agregar `WHERE merchant_id = ?` en **cada query del backend** — docenas de puntos donde un bug puede filtrar datos de otro comerciante. Es un riesgo de seguridad real en un SaaS multi-tenant.
+
+### Costos de Supabase
+
+| Tier | Precio | DB | Storage | Cuándo usarlo |
+|------|--------|----|---------|-|
+| Free | $0/mes | 500 MB | 1 GB | Desarrollo + pilotos |
+| Pro | $25/mes | 8 GB | 100 GB + backups diarios | Cuando haya comerciantes pagando |
+
+El Pro ($25/mes) ya está contemplado en el estimado de infraestructura de $30–50/mes.
+
+### Consideraciones importantes
+
+- **Vendor lock-in**: Supabase Auth y Storage crean dependencia. Migrar en el futuro tiene costo, pero es manejable. Para el MVP no es un problema real.
+- **Redis sigue siendo necesario**: Supabase no reemplaza Redis. Redis hace dos cosas distintas: cola de tareas Celery + contexto de conversaciones con TTL 24h.
+- **Connection pooling**: En producción activar **PgBouncer** (incluido en el plan Pro de Supabase) para pooling de conexiones — importante con múltiples Celery workers.
+- **Realtime para pedidos**: Los updates en tiempo real de nuevos pedidos en el panel admin se pueden implementar con Supabase Realtime sin infraestructura adicional.
+
+### Veredicto
+
+Sí, usar Supabase. Simplifica el stack, el free tier es generoso para el MVP, y el RLS por `merchant_id` es exactamente lo que necesita un SaaS multi-tenant. La única alternativa sería gestionar Postgres + Auth + Storage por separado, lo cual agrega complejidad y costo sin beneficios reales en esta etapa.
+
+---
+
 ## Cómo correr el proyecto localmente
 
 ### Requisitos previos
@@ -214,6 +314,102 @@ ngrok http 8000
 | 1 (inicio) | 1,000 |
 | 2 | 10,000 |
 | 3 | 100,000 |
+
+---
+
+## Guía: Crear Cuenta Meta Business (paso a paso)
+
+Estos son los pasos concretos para configurar VentaBot como plataforma en Meta. Hay cosas que podés hacer hoy mismo y otras que requieren empresa legal.
+
+### Requisitos previos
+- Cuenta de Facebook personal activa (la del fundador del proyecto)
+- Nombre del negocio, dirección, teléfono y sitio web (puede ser el futuro landing de VentaBot)
+- Documentos de la empresa **cuando esté constituida**: NIT boliviano + FUNDEMPRESA, extracto bancario o factura de servicios a nombre de la empresa
+
+### Paso 1 — Crear la Meta Business Account *(hacer hoy)*
+1. Ir a **business.facebook.com** → "Crear cuenta"
+2. Completar: nombre del negocio, tu nombre completo, email de trabajo
+3. Agregar método de pago (tarjeta o banco) — necesario para pagar conversaciones de WhatsApp en producción
+4. Verificar el dominio del sitio web de VentaBot (meta tag HTML o registro DNS TXT)
+
+### Paso 2 — Crear la Meta App de desarrollo *(hacer hoy)*
+1. Ir a **developers.facebook.com** → "Mis apps" → "Crear app"
+2. Tipo de app: **Business**
+3. Vincular a la Meta Business Account recién creada
+4. Agregar productos dentro de la app:
+   - **WhatsApp** → para WhatsApp Cloud API
+   - **Messenger** → para Messenger API
+5. En WhatsApp → "Comenzar":
+   - Copiar el **número de prueba gratuito** (para sandbox)
+   - Copiar el **token de acceso temporal** (válido 24h — renovar manualmente durante desarrollo)
+   - Copiar el **Phone Number ID** y el **WhatsApp Business Account ID**
+6. Guardar en `.env`:
+   ```
+   META_APP_ID=...
+   META_APP_SECRET=...
+   WHATSAPP_TOKEN=...
+   WHATSAPP_PHONE_NUMBER_ID=...
+   WHATSAPP_WABA_ID=...
+   WEBHOOK_VERIFY_TOKEN=una-cadena-secreta-que-tu-defines
+   ```
+
+### Paso 3 — Configurar el webhook *(hacer mientras se desarrolla)*
+1. En la app de Meta → WhatsApp → Configuración → Webhooks
+2. URL del webhook: `https://tu-ngrok-url/api/v1/webhooks/whatsapp`
+3. Token de verificación: el `WEBHOOK_VERIFY_TOKEN` de tu `.env`
+4. Suscribir a los eventos: `messages`, `message_deliveries`, `message_reads`, `message_reactions`
+5. Meta hace un GET al endpoint con un `hub.challenge` — FastAPI debe responderlo:
+   ```python
+   @router.get("/webhooks/whatsapp")
+   def verify_webhook(hub_mode: str, hub_verify_token: str, hub_challenge: str):
+       if hub_verify_token == settings.WEBHOOK_VERIFY_TOKEN:
+           return PlainTextResponse(hub_challenge)
+       raise HTTPException(403)
+   ```
+
+### Paso 4 — Verificar el negocio en Meta *(requiere empresa legal constituida)*
+1. En Meta Business Manager → Configuración → Información del negocio → "Verificar"
+2. Documentos aceptados para Bolivia:
+   - Registro de empresa FUNDEMPRESA o licencia de funcionamiento municipal
+   - Extracto bancario a nombre de la empresa
+   - Factura de servicios (luz, teléfono, internet) a nombre de la empresa
+3. Proceso: 1–5 días hábiles
+4. ⚠️ Sin esta verificación no se puede lanzar a producción ni habilitar Embedded Signup
+
+### Paso 5 — Habilitar Embedded Signup *(requiere negocio verificado)*
+Embedded Signup permite que tus comerciantes conecten su propio número de WhatsApp desde el panel admin de VentaBot, sin salir de la app.
+
+1. En la app de Meta → WhatsApp → Configuración → "Embedded Signup"
+2. Habilitar el flujo
+3. Los permisos que deberás solicitar al comerciante:
+   - `whatsapp_business_management`
+   - `whatsapp_business_messaging`
+4. Implementar el botón de Embedded Signup en el panel admin (es un botón de Facebook que abre el flujo OAuth de Meta directamente en tu UI)
+
+### Paso 6 — Solicitar permisos avanzados para producción *(requiere app verificada)*
+1. En Meta App → "Revisión de app" → "Permisos y funciones"
+2. Solicitar:
+   - `whatsapp_business_management` — para gestionar WABAs de comerciantes
+   - `whatsapp_business_messaging` — para enviar/recibir mensajes en producción
+   - `pages_messaging` — para Messenger
+3. Por cada permiso adjuntar:
+   - Descripción detallada del caso de uso
+   - Video screencast del flujo completo (grabación de pantalla)
+   - Enlace a la política de privacidad pública de VentaBot
+4. Tiempo de aprobación: 3–7 días hábiles
+
+### Resumen de tiempos
+
+| Paso | Prerequisito | ¿Cuándo hacerlo? |
+|------|--------------|------------------|
+| Crear Meta Business Account | Solo cuenta de Facebook | **Hoy** |
+| Crear Meta App de desarrollo | Meta Business Account | **Hoy** |
+| Sandbox WhatsApp (número de prueba) | Meta App | **Hoy** |
+| Verificación del negocio | Empresa legal (NIT + FUNDEMPRESA) | Cuando esté constituida |
+| Embedded Signup habilitado | Negocio verificado | Post-verificación |
+| Aprobación de permisos avanzados | App + negocio verificados | Post-verificación (3–7 días) |
+
+> **Acción inmediata**: Los pasos 1, 2 y 3 se pueden hacer hoy mismo para empezar a codificar con el sandbox de Meta. La verificación del negocio se gestiona en paralelo cuando esté lista la empresa.
 
 ---
 
