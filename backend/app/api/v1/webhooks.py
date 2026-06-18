@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 
 from app.config import settings
 from app.workers.tasks import process_whatsapp_message, process_messenger_message
@@ -9,13 +10,14 @@ router = APIRouter(tags=["webhooks"])
 # ── WhatsApp ──────────────────────────────────────────────────────────────────
 
 @router.get("/webhook/whatsapp")
-async def whatsapp_verify(
-    hub_mode: str = Query(alias="hub.mode"),
-    hub_challenge: str = Query(alias="hub.challenge"),
-    hub_verify_token: str = Query(alias="hub.verify_token"),
-) -> int:
+async def whatsapp_verify(request: Request) -> PlainTextResponse:
+    params = request.query_params
+    hub_mode = params.get("hub.mode")
+    hub_challenge = params.get("hub.challenge")
+    hub_verify_token = params.get("hub.verify_token")
+
     if hub_mode == "subscribe" and hub_verify_token == settings.meta_webhook_verify_token:
-        return int(hub_challenge)
+        return PlainTextResponse(hub_challenge)
     raise HTTPException(status_code=403, detail="Verify token inválido")
 
 
@@ -38,13 +40,14 @@ async def whatsapp_webhook(request: Request) -> dict[str, str]:
 # ── Messenger ─────────────────────────────────────────────────────────────────
 
 @router.get("/webhook/messenger")
-async def messenger_verify(
-    hub_mode: str = Query(alias="hub.mode"),
-    hub_challenge: str = Query(alias="hub.challenge"),
-    hub_verify_token: str = Query(alias="hub.verify_token"),
-) -> int:
+async def messenger_verify(request: Request) -> PlainTextResponse:
+    params = request.query_params
+    hub_mode = params.get("hub.mode")
+    hub_challenge = params.get("hub.challenge")
+    hub_verify_token = params.get("hub.verify_token")
+
     if hub_mode == "subscribe" and hub_verify_token == settings.meta_webhook_verify_token:
-        return int(hub_challenge)
+        return PlainTextResponse(hub_challenge)
     raise HTTPException(status_code=403, detail="Verify token inválido")
 
 

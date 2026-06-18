@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     meta_app_secret: str = ""
     meta_webhook_verify_token: str
 
-    # Anthropic
-    anthropic_api_key: str
+    # OpenAI
+    openai_api_key: str
 
     # Supabase
     supabase_url: str = ""
