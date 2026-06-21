@@ -6,6 +6,31 @@
 
 ---
 
+## 0. Retomar el proyecto en otra máquina (Windows ↔ macOS)
+
+El repo es portable. La base de datos vive en Supabase (nube), así que es la misma
+desde cualquier máquina. Lo único que **no** está en git (por seguridad) es `.env`
+(secretos) y `.venv` (se regenera).
+
+```bash
+git clone https://github.com/twstd27/ventasbot.git
+cd ventasbot/backend
+uv sync                       # recrea el entorno desde uv.lock
+cp .env.example .env          # luego llenar con los valores reales (ver abajo)
+uv run alembic upgrade head   # idempotente: el schema ya está en Supabase
+uv run python scripts/seed.py # opcional: datos demo (idempotente)
+uv run python scripts/chat.py # probar el bot
+```
+
+**Pasar el `.env` a la otra máquina a mano** (AirDrop / gestor de contraseñas /
+copy-paste — NUNCA por git). Variables a completar: `DATABASE_URL` (usar el Session
+Pooler IPv4, ver comentario en `.env.example`), `LLM_API_KEY`, `META_*`,
+`WHATSAPP_*`, `SUPABASE_*`, `SECRET_KEY`.
+
+En macOS instalar `uv` con `brew install uv` (o el instalador oficial) y Python 3.12.
+
+---
+
 ## 1. Estado actual del proyecto
 
 ### Completado (~10-15% de implementación real)
