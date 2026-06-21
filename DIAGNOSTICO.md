@@ -92,37 +92,53 @@ El enfoque nuevo es **de abajo hacia arriba**: cada fase termina con algo que fu
 ### Fase 1 — Bot mínimo funcionando en local
 **Objetivo**: recibir un mensaje de texto y responder con OpenAI. Sin Docker, sin Celery, sin base de datos.
 
-- [ ] Configurar entorno local en macOS (Python 3.12, uv, variables de entorno)
-- [ ] Escribir lógica básica en `engine.py`: recibir texto → llamar OpenAI → retornar respuesta
-- [ ] Testear con `curl` o un script simple (sin webhook real de Meta todavía)
+- [x] Configurar entorno local (Windows, Python 3.12, uv, variables de entorno)
+- [x] Escribir lógica básica en `engine.py`: recibir texto → llamar LLM → retornar respuesta
+- [x] Testear con un script simple (`scripts/chat.py`, sin webhook real de Meta todavía)
 - [ ] Usar [ngrok](https://ngrok.com) para exponer local y probar con WhatsApp real
 
 **Criterio de éxito**: recibir un WhatsApp y ver la respuesta del bot en el teléfono.
+
+> Nota: en vez de OpenAI (pagos bloqueados hasta el lunes) se usa un proveedor
+> compatible y gratis (Groq, modelo `openai/gpt-oss-120b`). El código es agnóstico:
+> migrar a OpenAI es cambiar `LLM_*` en el `.env`. La prueba se hace por terminal
+> en vez de teléfono, que es más rápido para iterar.
 
 ---
 
 ### Fase 2 — Bot conectado a base de datos
 **Objetivo**: el bot puede consultar el catálogo real de productos.
 
-- [ ] Crear migraciones Alembic y aplicarlas a Supabase
-- [ ] Implementar `consultar_stock` tool: query real a `products` table
-- [ ] Implementar `obtener_info_negocio` tool: query a `merchants` table
-- [ ] Cargar y guardar historial de conversación en Redis
-- [ ] Sembrar datos de prueba (un merchant ficticio con productos)
+- [x] Crear migraciones Alembic y aplicarlas a Supabase
+- [x] Implementar `consultar_stock` tool: query real a `products` table
+- [x] Implementar `obtener_info_negocio` tool: query a `merchants` table
+- [x] Cargar y guardar historial de conversación (en Postgres, no Redis — ver nota)
+- [x] Sembrar datos de prueba (`scripts/seed.py`: merchant demo con 7 productos)
 
-**Criterio de éxito**: preguntar "¿tienen zapatillas talla 42?" y recibir respuesta basada en datos reales.
+**Criterio de éxito**: ✅ "¿tienen zapatillas talla 42?" devuelve Nike Air y Adidas con
+precio y stock reales desde Supabase.
+
+> Nota: el historial se persiste en Postgres (tablas `conversations`/`messages`) en
+> lugar de Redis. Es más simple, una sola fuente de verdad y sirve para el dashboard
+> de la Fase 4. Redis queda reservado para Celery (Fase 5).
 
 ---
 
 ### Fase 3 — Flujo de pedido completo
 **Objetivo**: el bot puede crear un pedido y generar un QR de pago.
 
-- [ ] Implementar `crear_pedido` tool: insertar en `orders` + `order_items`
-- [ ] Integrar dLocal (sandbox) para generar QR de pago
-- [ ] Implementar state machine de orden: pending → paid → delivered
-- [ ] Webhook de confirmación de pago de dLocal
+- [x] Implementar `crear_pedido` tool: insertar en `orders` + `order_items`
+- [x] Integrar dLocal (sandbox) para generar QR de pago (modo SIMULADO sin credenciales)
+- [x] Implementar state machine de orden: pending → paid → preparing → delivered/cancelled
+- [x] Webhook de confirmación de pago de dLocal (`POST /api/v1/webhook/payment`)
 
-**Criterio de éxito**: hacer un pedido completo por WhatsApp y ver la orden en la DB.
+**Criterio de éxito**: ✅ pedido creado (orden + items en DB), QR generado, webhook de pago
+marca la orden como `paid` y descuenta stock.
+
+> Pendiente al habilitar pagos (lunes): poner credenciales dLocal reales, validar el
+> request real contra el sandbox de dLocal y verificar la firma HMAC del webhook
+> entrante. El camino real ya está implementado en `app/services/payments.py` detrás
+> del chequeo de credenciales; hoy corre en modo simulado.
 
 ---
 

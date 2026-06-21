@@ -5,7 +5,10 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-engine = create_async_engine(settings.database_url, echo=False)
+# Supabase (incluido el pooler) exige TLS.
+connect_args = {"ssl": "require"} if "supabase" in settings.database_url else {}
+
+engine = create_async_engine(settings.database_url, echo=False, connect_args=connect_args)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
