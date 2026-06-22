@@ -170,11 +170,11 @@ marca la orden como `paid` y descuenta stock.
 ### Fase 4 — Dashboard mínimo (frontend)
 **Objetivo**: el merchant puede ver sus pedidos y gestionar su catálogo.
 
-- [ ] Instalar y configurar shadcn/ui
-- [ ] Integrar Supabase Auth (login con email)
-- [ ] Página de catálogo: listar, crear, editar productos
-- [ ] Página de pedidos: listar órdenes con estado
-- [ ] Página de conversaciones: ver hilos activos
+- [x] Primitivos de UI (Button/Input/Textarea con cva — equivalente ligero a shadcn/ui)
+- [x] Integrar Supabase Auth (login con email + alta de cuenta) + middleware de protección de rutas
+- [x] Página de catálogo: listar, crear, editar, eliminar y activar/desactivar productos (Server Actions con scope por merchant)
+- [x] Página de pedidos: listar órdenes con estado (filas expandibles con items, badges de estado) — solo lectura
+- [x] Página de conversaciones: ver hilos activos (lista + panel de mensajes user/assistant) — solo lectura
 
 **Criterio de éxito**: un merchant puede logearse, agregar un producto, y verlo disponible en el bot.
 
