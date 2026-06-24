@@ -14,6 +14,24 @@ router = APIRouter(tags=["webhooks"])
 _DLOCAL_PAID = {"PAID", "AUTHORIZED"}
 
 
+async def _dispatch(channel: str, channel_id: str | None, message: dict) -> None:
+    """Procesa un mensaje entrante: en dev directo, en prod vía Celery.
+
+    `settings.use_celery` controla el modo (ver config.py). El modo directo evita
+    necesitar Redis/worker para probar en local.
+    """
+    if settings.use_celery:
+        if channel == "whatsapp":
+            process_whatsapp_message.delay(phone_number_id=channel_id, message=message)
+        else:
+            process_messenger_message.delay(page_id=channel_id, messaging=message)
+        return
+
+    from app.bot.engine import handle_message
+
+    await handle_message(channel=channel, channel_id=channel_id, message=message)
+
+
 # ── WhatsApp ──────────────────────────────────────────────────────────────────
 
 @router.get("/webhook/whatsapp")
@@ -35,11 +53,9 @@ async def whatsapp_webhook(request: Request) -> dict[str, str]:
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
             value = change.get("value", {})
+            phone_number_id = value.get("metadata", {}).get("phone_number_id")
             for message in value.get("messages", []):
-                process_whatsapp_message.delay(
-                    phone_number_id=value.get("metadata", {}).get("phone_number_id"),
-                    message=message,
-                )
+                await _dispatch("whatsapp", phone_number_id, message)
 
     return {"status": "ok"}
 
@@ -65,10 +81,7 @@ async def messenger_webhook(request: Request) -> dict[str, str]:
     for entry in payload.get("entry", []):
         for messaging in entry.get("messaging", []):
             if "message" in messaging:
-                process_messenger_message.delay(
-                    page_id=entry.get("id"),
-                    messaging=messaging,
-                )
+                await _dispatch("messenger", entry.get("id"), messaging)
 
     return {"status": "ok"}
 

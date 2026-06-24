@@ -183,13 +183,30 @@ marca la orden como `paid` y descuenta stock.
 ### Fase 5 — Despliegue y Celery
 **Objetivo**: el sistema corre en producción con el flujo async correcto.
 
-- [ ] Activar Celery + Redis en el flujo de webhooks
+- [x] **RLS de Supabase** — aplicado y verificado (2026-06-23). Las 6 tablas de dominio + `alembic_version` con RLS; políticas por email del JWT. Script idempotente en `backend/scripts/apply_rls.py`.
+- [x] **Respuesta a Meta API (WhatsApp)** — el bot recibe Y responde por WhatsApp. `app/services/whatsapp.py` envía vía Graph API; probado end-to-end con número real (2026-06-23).
+- [ ] Activar Celery + Redis en el flujo de webhooks (en dev se procesa síncrono con `use_celery=False`; falta el worker para prod)
+- [ ] Respuesta saliente por Messenger (falta page access token + send)
 - [ ] Desplegar backend en Railway (server + worker)
 - [ ] Desplegar frontend en Vercel
 - [ ] Configurar dominio y webhook real de Meta en producción
-- [ ] Configurar RLS de Supabase correctamente
 
 **Criterio de éxito**: un pilot merchant real usando el bot en producción.
+
+---
+
+### Avance 2026-06-23 — Canal WhatsApp vivo + seguridad
+
+Hito grande: **el bot conversa por WhatsApp de punta a punta** y la base quedó asegurada.
+
+- **Seguridad (RLS)**: cerrada la alerta de Supabase. El backend usa el rol `postgres` (BYPASSRLS) y sigue operando normal; el frontend lee con la sesión autenticada (scope por email→merchant).
+- **WhatsApp end-to-end**: webhook verificado, token permanente (System User), el bot recibe el mensaje, lo procesa con el LLM+tools y **envía la respuesta de vuelta**. Modo dev procesa síncrono (sin necesidad de Celery/Redis en Windows) vía `use_celery=False`.
+- **Fix catálogo**: `consultar_stock` ahora lista todo el catálogo si no se pasa `query` (antes respondía "catálogo vacío" ante preguntas generales). Devuelve `total_coincidencias`/`hay_mas` y limita a `MAX_RESULTS=8` para no volcar catálogos grandes.
+- **Formato de mensajes**: el bot ya no manda Markdown (tablas/`**`) que WhatsApp/Messenger no renderizan. `SYSTEM_PROMPT` lo instruye + `format_for_channel()` como red de seguridad channel-aware.
+
+**Arquitectura multi-tenant (SaaS) — confirmada en el modelo `Merchant`:** `plan` (free/basic/pro), `is_active`, credenciales de canal por-merchant (`whatsapp_phone_number_id`, `whatsapp_access_token`, `waba_id`, equivalentes de Messenger) y config de negocio por-merchant (`business_name`, `business_hours`, `business_location`, `welcome_message`). El bot ya enruta el mensaje al merchant por el `phone_number_id` del canal. **Gap para SaaS real**: (1) el envío usa el token global `META_ACCESS_TOKEN`, debería usar `merchant.whatsapp_access_token`; (2) falta onboarding self-service (signup → conectar WhatsApp → configurar negocio), hoy el merchant se crea por seed; (3) falta enforcement de `plan`/billing; (4) a escala, onboarding de WhatsApp vía Embedded Signup / Tech Provider de Meta.
+
+**Anti-alucinación pendiente**: el bot inventa datos que no tiene tool/dato (ej. inventó una dirección en Cochabamba al preguntar por entregas). Mitigar: endurecer el prompt para no inventar políticas/entregas/ubicación y derivar al dueño; llenar `business_hours`/`business_location` del merchant; considerar campos de entrega/envío y métodos de pago por-merchant.
 
 ---
 

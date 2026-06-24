@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     meta_app_id: str = ""
     meta_app_secret: str = ""
     meta_webhook_verify_token: str = ""
+    meta_access_token: str = ""  # token de la Graph API para ENVIAR mensajes
+    meta_graph_version: str = "v21.0"
+
+    # Procesamiento de mensajes entrantes.
+    # False (dev): el webhook procesa el mensaje en el acto (sin Celery/Redis).
+    # True (prod): lo encola en Celery para procesarlo en un worker aparte.
+    use_celery: bool = False
 
     # LLM (cualquier proveedor compatible con la API de OpenAI:
     # OpenAI, Groq, Gemini, etc. Solo cambia la key, la URL y el modelo)

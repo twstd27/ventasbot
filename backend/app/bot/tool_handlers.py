@@ -13,11 +13,15 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Conversation, Merchant, Order, OrderItem, Product
 from app.services.payments import create_payment_qr
+
+# Cuántos productos devolver como máximo por consulta. Con catálogos grandes,
+# en vez de listar todo, el bot muestra esta cantidad y pide acotar la búsqueda.
+MAX_RESULTS = 8
 
 
 @dataclass
@@ -50,12 +54,16 @@ def _tokenize(query: str) -> list[str]:
     return list(dict.fromkeys(tokens))  # dedup conservando orden
 
 
-async def consultar_stock(ctx: ToolContext, *, query: str) -> dict[str, Any]:
-    """Busca productos del merchant por nombre o descripción (búsqueda por términos)."""
-    base = select(Product).where(
+async def consultar_stock(ctx: ToolContext, *, query: str = "") -> dict[str, Any]:
+    """Busca productos del merchant por nombre/descripción.
+
+    Sin `query` (o vacío) devuelve todo el catálogo activo, para responder a
+    preguntas generales del tipo "¿qué productos tienes?".
+    """
+    filters = [
         Product.merchant_id == ctx.merchant.id,
         Product.is_active.is_(True),
-    )
+    ]
 
     tokens = _tokenize(query)
     if tokens:
@@ -63,19 +71,35 @@ async def consultar_stock(ctx: ToolContext, *, query: str) -> dict[str, Any]:
         for tok in tokens:
             conditions.append(Product.name.ilike(f"%{tok}%"))
             conditions.append(Product.description.ilike(f"%{tok}%"))
-        base = base.where(or_(*conditions))
+        filters.append(or_(*conditions))
 
-    productos = (await ctx.session.execute(base.limit(10))).scalars().all()
+    # Total de coincidencias (para saber si hay más de las que mostramos).
+    total = (
+        await ctx.session.execute(
+            select(func.count()).select_from(Product).where(*filters)
+        )
+    ).scalar() or 0
+
+    # Mostramos solo una página: con catálogos grandes no devolvemos todo,
+    # el bot pedirá al cliente que acote la búsqueda (ver hay_mas).
+    productos = (
+        await ctx.session.execute(
+            select(Product).where(*filters).order_by(Product.stock.desc()).limit(MAX_RESULTS)
+        )
+    ).scalars().all()
 
     if not productos:
-        return {
-            "encontrados": 0,
-            "productos": [],
-            "nota": f"No se encontraron productos para '{query}'.",
-        }
+        nota = (
+            "El catálogo no tiene productos activos."
+            if not query
+            else f"No se encontraron productos para '{query}'."
+        )
+        return {"total_coincidencias": 0, "mostrados": 0, "hay_mas": False, "productos": [], "nota": nota}
 
-    return {
-        "encontrados": len(productos),
+    resultado: dict[str, Any] = {
+        "total_coincidencias": total,
+        "mostrados": len(productos),
+        "hay_mas": total > len(productos),
         "productos": [
             {
                 "id": str(p.id),
@@ -88,6 +112,12 @@ async def consultar_stock(ctx: ToolContext, *, query: str) -> dict[str, Any]:
             for p in productos
         ],
     }
+    if resultado["hay_mas"]:
+        resultado["nota"] = (
+            f"Hay {total} productos en total; se muestran {len(productos)}. "
+            "Pídele al cliente que indique qué tipo o categoría busca para acotar."
+        )
+    return resultado
 
 
 async def obtener_info_negocio(ctx: ToolContext, **_: Any) -> dict[str, Any]:

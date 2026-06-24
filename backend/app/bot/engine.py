@@ -6,6 +6,7 @@ persiste en Postgres (tablas conversations / messages).
 """
 
 import json
+import re
 from functools import lru_cache
 from typing import Any
 
@@ -26,14 +27,53 @@ SYSTEM_PROMPT = """Eres un asistente de ventas para {business_name}.
 Ayudas a los clientes a consultar productos, verificar disponibilidad y realizar pedidos.
 Responde siempre en español boliviano, de forma amable y concisa.
 
+FORMATO DE LOS MENSAJES (muy importante): escribes por WhatsApp/Messenger, que NO
+entienden Markdown. Nunca uses tablas, ni asteriscos dobles (**), ni almohadillas (#),
+ni barras (|). Escribe como en un chat real: natural, cálido y breve. Para listar
+productos usa una línea por producto con una viñeta simple, por ejemplo:
+• Zapatilla Nike Air — Bs 450 (9 disponibles)
+Puedes usar emojis con moderación. Mantén los mensajes cortos y fáciles de leer en el celular.
+
 Usa la herramienta consultar_stock para verificar precios y disponibilidad antes de
-afirmar que algo existe — nunca inventes productos, precios ni stock.
+afirmar que algo existe — nunca inventes productos, precios ni stock. Si el cliente
+pregunta en general qué hay, llama a consultar_stock sin 'query' para ver el catálogo.
+Si el resultado indica que hay más productos de los mostrados (hay_mas) o un total
+grande, NO los listes todos: muestra unos pocos y pregúntale al cliente qué tipo o
+categoría busca para acotar la búsqueda.
 
 Antes de usar crear_pedido, muestra al cliente un resumen (productos, cantidades y
 total) y espera su confirmación explícita en un mensaje aparte. Crea el pedido una
 sola vez; si ya lo creaste en esta conversación, no lo vuelvas a crear.
 Si te preguntan por horario, ubicación o datos del negocio, usa obtener_info_negocio.
 Cuando no puedas ayudar con algo, ofrece comunicar al dueño del negocio."""
+
+
+def format_for_channel(text: str, channel: str) -> str:
+    """Red de seguridad: limpia Markdown que el LLM pueda colar, según el canal.
+
+    WhatsApp usa *un asterisco* para negrita; Messenger no soporta formato, se quita.
+    Ni WhatsApp ni Messenger renderizan encabezados (#) ni negrita doble (**).
+    """
+    if not text:
+        return text
+    # Quitar encabezados Markdown (#, ##, ...).
+    text = re.sub(r"^[ \t]{0,3}#{1,6}[ \t]*", "", text, flags=re.MULTILINE)
+    # Tablas Markdown: quitar filas separadoras (|---|:--:|) y convertir filas
+    # "| a | b | c |" en texto natural "a — b — c".
+    text = re.sub(r"^[ \t]*\|?[ \t]*[:\- ]*-[:\- |]*$", "", text, flags=re.MULTILINE)
+
+    def _table_row(m: re.Match[str]) -> str:
+        cells = [c.strip() for c in m.group(0).strip().strip("|").split("|")]
+        return " — ".join(c for c in cells if c)
+
+    text = re.sub(r"^[ \t]*\|.+\|[ \t]*$", _table_row, text, flags=re.MULTILINE)
+    # Negrita doble -> WhatsApp: *texto*; otros canales: sin marca.
+    bold = r"*\1*" if channel == "whatsapp" else r"\1"
+    text = re.sub(r"\*\*(.+?)\*\*", bold, text)
+    text = re.sub(r"__(.+?)__", bold, text)
+    # Colapsar líneas en blanco de más.
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 @lru_cache
@@ -192,4 +232,18 @@ async def handle_message(channel: str, channel_id: str, message: dict[str, Any])
         reply = await reply_to_customer(session, merchant, channel, sender_id, text)
         print(f"[{channel}] {sender_id} -> {text!r}")
         print(f"[{channel}] bot  -> {reply!r}")
-        # TODO (Fase 5): enviar `reply` de vuelta al cliente vía Meta API.
+
+        # Enviar la respuesta de vuelta al cliente (limpia Markdown según el canal).
+        if not reply:
+            return
+        reply = format_for_channel(reply, channel)
+        if channel == "whatsapp":
+            from app.services.whatsapp import send_whatsapp_text
+
+            try:
+                await send_whatsapp_text(phone_number_id=channel_id, to=sender_id, text=reply)
+                print(f"[{channel}] respuesta enviada a {sender_id}.")
+            except Exception as exc:  # no romper el webhook si Meta falla
+                print(f"[{channel}] ERROR al enviar respuesta: {exc}")
+        else:  # messenger: envío pendiente (requiere page access token)
+            print(f"[{channel}] envío saliente aún no implementado; respuesta no enviada.")
