@@ -3,16 +3,17 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-white text-zinc-950 hover:bg-zinc-200",
-        primary: "bg-emerald-600 text-white hover:bg-emerald-500",
+        default: "bg-foreground text-background hover:bg-foreground/90",
+        primary: "bg-primary text-primary-foreground hover:bg-primary/90",
         outline:
-          "border border-zinc-700 bg-transparent text-zinc-100 hover:bg-zinc-800",
-        ghost: "text-zinc-300 hover:bg-zinc-800 hover:text-white",
-        danger: "bg-red-600 text-white hover:bg-red-500",
+          "border border-border bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground",
+        ghost: "text-muted-foreground hover:bg-accent hover:text-foreground",
+        danger:
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
       },
       size: {
         default: "h-9 px-4 py-2",

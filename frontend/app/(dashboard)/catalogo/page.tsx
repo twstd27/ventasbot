@@ -20,7 +20,7 @@ export default async function CatalogoPage() {
     return (
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">Catálogo</h1>
-        <p className="text-sm text-red-400">
+        <p className="text-sm text-destructive">
           Error cargando productos: {error.message}
         </p>
       </div>

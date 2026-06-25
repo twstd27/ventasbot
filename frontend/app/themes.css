@@ -1,0 +1,146 @@
+/* Generado desde @radix-ui/colors — Natural Pairings (estilo Park UI). NO editar a mano. */
+
+[data-palette="slate"]:not(.dark) {
+  --background: 252 252 253;
+  --card: 249 249 251;
+  --muted: 240 240 243;
+  --accent: 232 232 236;
+  --border: 217 217 224;
+  --input: 205 206 214;
+  --muted-foreground: 96 100 108;
+  --foreground: 28 32 36;
+  --card-foreground: 28 32 36;
+  --accent-foreground: 28 32 36;
+  --ring: 141 164 239;
+  --primary: 62 99 221;
+  --primary-foreground: 255 255 255;
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
+}
+
+.dark[data-palette="slate"] {
+  --background: 17 17 19;
+  --card: 24 25 27;
+  --muted: 33 34 37;
+  --accent: 39 42 45;
+  --border: 54 58 63;
+  --input: 67 72 78;
+  --muted-foreground: 176 180 186;
+  --foreground: 237 238 240;
+  --card-foreground: 237 238 240;
+  --accent-foreground: 237 238 240;
+  --ring: 67 93 177;
+  --primary: 62 99 221;
+  --primary-foreground: 255 255 255;
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
+}
+
+[data-palette="sage"]:not(.dark) {
+  --background: 251 253 252;
+  --card: 247 249 248;
+  --muted: 238 241 240;
+  --accent: 230 233 232;
+  --border: 215 218 217;
+  --input: 203 207 205;
+  --muted-foreground: 95 101 99;
+  --foreground: 26 33 30;
+  --card-foreground: 26 33 30;
+  --accent-foreground: 26 33 30;
+  --ring: 101 186 116;
+  --primary: 70 167 88;
+  --primary-foreground: 255 255 255;
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
+}
+
+.dark[data-palette="sage"] {
+  --background: 16 18 17;
+  --card: 23 25 24;
+  --muted: 32 34 33;
+  --accent: 39 42 41;
+  --border: 55 59 57;
+  --input: 68 73 71;
+  --muted-foreground: 173 181 178;
+  --foreground: 236 238 237;
+  --card-foreground: 236 238 237;
+  --accent-foreground: 236 238 237;
+  --ring: 62 121 73;
+  --primary: 70 167 88;
+  --primary-foreground: 255 255 255;
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
+}
+
+[data-palette="sand"]:not(.dark) {
+  --background: 253 253 252;
+  --card: 249 249 248;
+  --muted: 241 240 239;
+  --accent: 233 232 230;
+  --border: 218 217 214;
+  --input: 207 206 202;
+  --muted-foreground: 99 99 94;
+  --foreground: 33 32 28;
+  --card-foreground: 33 32 28;
+  --accent-foreground: 33 32 28;
+  --ring: 226 163 54;
+  --primary: 255 197 61;
+  --primary-foreground: 33 30 26;
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
+}
+
+.dark[data-palette="sand"] {
+  --background: 17 17 16;
+  --card: 25 25 24;
+  --muted: 34 34 33;
+  --accent: 42 42 40;
+  --border: 59 58 55;
+  --input: 73 72 68;
+  --muted-foreground: 181 179 173;
+  --foreground: 238 238 236;
+  --card-foreground: 238 238 236;
+  --accent-foreground: 238 238 236;
+  --ring: 143 100 36;
+  --primary: 255 197 61;
+  --primary-foreground: 33 30 26;
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
+}
+
+[data-palette="mauve"]:not(.dark) {
+  --background: 253 252 253;
+  --card: 250 249 251;
+  --muted: 242 239 243;
+  --accent: 234 231 236;
+  --border: 219 216 224;
+  --input: 208 205 215;
+  --muted-foreground: 101 99 109;
+  --foreground: 33 31 38;
+  --card-foreground: 33 31 38;
+  --accent-foreground: 33 31 38;
+  --ring: 190 147 228;
+  --primary: 142 78 198;
+  --primary-foreground: 255 255 255;
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
+}
+
+.dark[data-palette="mauve"] {
+  --background: 18 17 19;
+  --card: 26 25 27;
+  --muted: 35 34 37;
+  --accent: 43 41 45;
+  --border: 60 57 63;
+  --input: 73 71 78;
+  --muted-foreground: 181 178 188;
+  --foreground: 238 238 240;
+  --card-foreground: 238 238 240;
+  --accent-foreground: 238 238 240;
+  --ring: 132 87 170;
+  --primary: 142 78 198;
+  --primary-foreground: 255 255 255;
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
+}
+

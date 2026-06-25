@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import type { Product } from "@/lib/types";
 import {
   createProduct,
@@ -55,12 +56,15 @@ export function ProductForm({ product, onClose, onSaved }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-card-foreground">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">
+          <h2 className="text-lg font-bold text-foreground">
             {product ? "Editar producto" : "Nuevo producto"}
           </h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-white">
+          <button
+            onClick={onClose}
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -116,17 +120,15 @@ export function ProductForm({ product, onClose, onSaved }: Props) {
             />
           </Field>
 
-          <label className="flex items-center gap-2 text-sm text-zinc-300">
-            <input
-              type="checkbox"
+          <div className="pt-1">
+            <Switch
+              label="Activo (visible para el bot)"
               checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-              className="h-4 w-4 accent-emerald-600"
+              onCheckedChange={setIsActive}
             />
-            Activo (visible para el bot)
-          </label>
+          </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>
@@ -151,7 +153,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-sm text-zinc-300">{label}</label>
+      <label className="text-sm text-muted-foreground">{label}</label>
       {children}
     </div>
   );

@@ -35,6 +35,12 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isAuthRoute = path.startsWith("/login");
 
+  // Ruta pública de preview de UI: accesible sin sesión y sin redirección.
+  if (path.startsWith("/ui-preview")) {
+    return response;
+  }
+
+
   // Sin sesión y fuera de /login -> redirigir a login.
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();

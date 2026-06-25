@@ -56,7 +56,7 @@ export function ProductList({ products }: { products: Product[] }) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Catálogo</h1>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-muted-foreground">
             {products.length} producto{products.length === 1 ? "" : "s"} · lo que
             el bot puede vender
           </p>
@@ -68,18 +68,18 @@ export function ProductList({ products }: { products: Product[] }) {
       </div>
 
       {products.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-zinc-800 py-16 text-center">
-          <Package className="h-10 w-10 text-zinc-600" />
-          <p className="text-zinc-400">Aún no tienes productos.</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
+          <Package className="h-10 w-10 text-muted-foreground" />
+          <p className="text-muted-foreground">Aún no tienes productos.</p>
           <Button variant="primary" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Agregar el primero
           </Button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-zinc-800">
+        <div className="overflow-hidden rounded-xl border border-border">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-900 text-left text-zinc-400">
+            <thead className="bg-muted text-left text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-medium">Producto</th>
                 <th className="px-4 py-3 font-medium">Precio</th>
@@ -88,24 +88,24 @@ export function ProductList({ products }: { products: Product[] }) {
                 <th className="px-4 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800">
+            <tbody className="divide-y divide-border">
               {products.map((p) => (
-                <tr key={p.id} className="hover:bg-zinc-900/50">
+                <tr key={p.id} className="hover:bg-muted/50">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-white">{p.name}</p>
+                    <p className="font-medium text-foreground">{p.name}</p>
                     {p.description && (
-                      <p className="line-clamp-1 max-w-xs text-xs text-zinc-500">
+                      <p className="line-clamp-1 max-w-xs text-xs text-muted-foreground">
                         {p.description}
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-zinc-200">
+                  <td className="px-4 py-3 text-foreground">
                     {formatBs(p.price)}
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={
-                        p.stock === 0 ? "text-red-400" : "text-zinc-200"
+                        p.stock === 0 ? "text-destructive" : "text-foreground"
                       }
                     >
                       {p.stock}
@@ -118,8 +118,8 @@ export function ProductList({ products }: { products: Product[] }) {
                       className={
                         "rounded-full px-2.5 py-0.5 text-xs font-medium " +
                         (p.is_active
-                          ? "bg-emerald-600/15 text-emerald-400"
-                          : "bg-zinc-700/40 text-zinc-400")
+                          ? "bg-primary/15 text-primary"
+                          : "bg-muted text-muted-foreground")
                       }
                     >
                       {p.is_active ? "Activo" : "Inactivo"}
@@ -142,7 +142,7 @@ export function ProductList({ products }: { products: Product[] }) {
                         disabled={busyId === p.id}
                         aria-label="Eliminar"
                       >
-                        <Trash2 className="h-4 w-4 text-red-400" />
+                        <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
                   </td>
